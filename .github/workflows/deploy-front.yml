@@ -17,10 +17,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ставим AWS CLI v2 (без apt)
-      - name: Setup AWS CLI
-        uses: aws-actions/setup-aws-cli@v3
-
+      # Устанавливаем AWS CLI (v1) через pip в $HOME/.local/bin
+      - name: Install AWS CLI
+        run: |
+          python3 -m pip install --upgrade --user pip awscli
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
       - name: Check AWS CLI
         run: aws --version
 
@@ -28,8 +29,7 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ vars.AWS_REGION }}          # ru-central1
-          AWS_DEFAULT_REGION: ${{ vars.AWS_REGION }}  # на всякий случай
+          AWS_DEFAULT_REGION: ${{ vars.AWS_REGION }}   # ru-central1
         run: |
           aws s3 sync . s3://${{ vars.S3_BUCKET }} \
             --endpoint-url ${{ vars.S3_ENDPOINT }} \
