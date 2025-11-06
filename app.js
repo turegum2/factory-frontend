@@ -999,10 +999,17 @@ try {
 
     const data = await resp.json();
 
-    // Обновляем окно со спиннером на готовую страницу
-    const url = `${BASE}${data.url}`;
-    if (preview) preview.location.replace(url);
-    else window.open(url, '_blank');
+    // Обновляем окно: если бэк дал готовый HTML — рисуем его inline,
+    // иначе открываем ссылку на файл в витрине /ui/...
+    if (data.html && preview) {
+      preview.document.open();
+      preview.document.write(data.html);
+      preview.document.close();
+    } else {
+        const url = /^https?:\/\//i.test(data.url) ? data.url : `${BASE}${data.url}`;
+        if (preview) preview.location.replace(url);
+        else window.open(url, '_blank', 'noopener');
+    }
 
     // Сразу качаем Excel ИМЕННО того же расчёта
     if (data.excel_url) {
