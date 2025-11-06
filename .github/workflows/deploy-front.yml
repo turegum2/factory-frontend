@@ -1,0 +1,32 @@
+name: Deploy frontend to Yandex Object Storage
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "index.html"
+      - "help.html"
+      - "app.js"
+      - "app.css"
+      - "config.js"
+      - "favicon*"
+      - ".github/workflows/deploy-front.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install AWS CLI
+        run: sudo apt-get update && sudo apt-get install -y awscli
+
+      - name: Sync to Object Storage (S3 compatible)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ vars.AWS_REGION }}
+        run: |
+          aws s3 sync . s3://${{ vars.S3_BUCKET }} \
+            --endpoint-url ${{ vars.S3_ENDPOINT }} \
+            --delete \
+            --exclude ".git/*" --exclude ".github/*"
