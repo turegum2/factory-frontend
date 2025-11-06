@@ -930,101 +930,107 @@ document.getElementById('btn-help').addEventListener('click', ()=>{
 window.open("help.html", "_blank", "noopener");
 });
 
-// --- Run optimization via local service and download results (Excel + HTML) ---
 document.getElementById('btn-optimize').addEventListener('click', async ()=>{
-const btn = document.getElementById('btn-optimize');
-if (btn.disabled) return;                 // защита от повторных кликов
-// --- заблокировать кнопку и сменить текст ---
-btn.disabled = true;
-btn.dataset.prev = btn.innerHTML;
-btn.innerHTML = '⏳ Идёт расчёт…';
+  const btn = document.getElementById('btn-optimize');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  btn.dataset.prev = btn.innerHTML;
+  btn.innerHTML = '⏳ Идёт расчёт…';
 
-const BASE = (window.ENV && window.ENV.API_BASE) || "https://d5dbceei9enp79259un2.z7jmlavt.apigw.yandexcloud.net";
+  const BASE = (window.ENV && window.ENV.API_BASE) || "https://d5dbceei9enp79259un2.z7jmlavt.apigw.yandexcloud.net";
+  const resolveUrl = (u) => {
+    if (!u) return '';
+    const fixed = u.replace(/^https(?!:)/, 'https:').replace(/^http(?!:)/, 'http:');
+    try { return new URL(fixed, BASE).href; } catch { return fixed; }
+  };
 
-const resolveUrl = (u) => {
-  if (!u) return '';
-  // починим редкий баг "https//" → "https://"
-  const fixed = u.replace(/^https(?!:)/, 'https:').replace(/^http(?!:)/, 'http:');
-  try { return new URL(fixed, BASE).href; } catch { return fixed; }
-};
-
-// 1) Открываем вкладку синхронно — браузер не заблокирует
-const preview = window.open('about:blank', 'optimizer_preview');
-if (preview) {
-    preview.document.write(`
+  const spinnerHtml = `
     <!doctype html><meta charset="utf-8">
     <title>Формирование диаграммы...</title>
     <style>
-        body{font-family:Inter,system-ui;margin:40px;color:#111; background:#f8fafc}
-        .container{max-width:600px; margin:100px auto; text-align:center}
-        .spinner{width:48px;height:48px;border:4px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 20px}
-        @keyframes spin{to{transform:rotate(360deg)}}
-        h1{font-size:24px; margin:20px 0 10px}
-        p{color:#64748b; font-size:14px}
+      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,Helvetica Neue,Arial;margin:40px;color:#111;background:#f8fafc}
+      .container{max-width:600px;margin:100px auto;text-align:center}
+      .spinner{width:48px;height:48px;border:4px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 20px}
+      @keyframes spin{to{transform:rotate(360deg)}}
+      h1{font-size:24px;margin:20px 0 10px}
+      p{color:#64748b;font-size:14px}
     </style>
     <div class="container">
-        <div class="spinner"></div>
-        <h1>Формируем план производства...</h1>
-        <p>Расчёт оптимального расписания<br>Окно обновится автоматически</p>
-    </div>
-    `);
-    preview.document.close();
-}
+      <div class="spinner"></div>
+      <h1>Формируем план производства...</h1>
+      <p>Расчёт оптимального расписания<br>Окно обновится автоматически</p>
+    </div>`;
 
-try {
-    // --- сбор данных как раньше ---
+  // уникальное окно под каждый кальк — старые остаются открыты
+  const previewName = 'optimizer_preview_' + Date.now();
+  let preview = null;
+
+  try {
+    // 1) открываем окно строго в пользовательском клике, браузер не блокирует
+    preview = window.open('about:blank', previewName);
+
+    // 2) аккуратно рисуем спиннер (без падений, чтобы finally сработал)
+    try {
+      if (preview) { preview.document.open(); preview.document.write(spinnerHtml); preview.document.close(); }
+    } catch (e) {
+      try { if (preview) preview.location.replace('about:blank'); } catch {}
+      // небольшой retry, если навигация ещё не применилась
+      await new Promise(r=>setTimeout(r,100));
+      try { if (preview) { preview.document.open(); preview.document.write(spinnerHub); preview.document.close(); } } catch {}
+    }
+
+    // 3) собираем payload
     const orders     = Object.values(project.orders).map(o=>({ order_id:o.id, priority:o.priority }));
     const deliveries = Object.values(project.deliveries).map(d=>({
-    delivery_id: d.id,
-    duration_min: d.duration,
-    lines: (d.lines||[]).map(l=>({ order_id: l.orderId, qty: l.qty })),
-    unlocks_stones: (d.stoneIds||[]).join(',')
+      delivery_id: d.id,
+      duration_min: d.duration,
+      lines: (d.lines||[]).map(l=>({ order_id: l.orderId, qty: l.qty })),
+      unlocks_stones: (d.stoneIds||[]).join(',')
     }));
     const stones     = Object.values(project.stones).map(s=>({ stone_id:s.id, order_id:s.orderId, delivery_id:s.deliveryId }));
     const sawPrograms= Object.values(project.sawPrograms).map(sp=>({ prog_id:sp.id, stone_id:sp.stoneId, load_C_min:sp.load, process_D_min:sp.process, unload_E_min:sp.unload }));
     const details    = Object.values(project.details).map(d=>({
-    detail_id:d.id,
-    order_id: (project.stones[d.stoneId] && project.stones[d.stoneId].orderId) ? 
-                project.stones[d.stoneId].orderId : '',
-    stone_id:d.stoneId, source_prog_id:d.sourceProgId,
-    need_edge: d.edgeNeeded? 'Y':'N',
-    edge_load_F_min: d.edge_load||0,
-    edge_process_G_min: d.edge_process||0,
-    edge_unload_H_min: d.edge_unload||0,
-    note: d.note||'',
-    millingStages: (d.millingStages||[]).map(ms=>({ id: ms.id, machine: ms.machine, mill_load_min: ms.load, mill_process_min: ms.process, mill_unload_min: ms.unload }))
+      detail_id:d.id,
+      order_id: (project.stones[d.stoneId] && project.stones[d.stoneId].orderId) ? project.stones[d.stoneId].orderId : '',
+      stone_id:d.stoneId, source_prog_id:d.sourceProgId,
+      need_edge: d.edgeNeeded? 'Y':'N',
+      edge_load_F_min: d.edge_load||0,
+      edge_process_G_min: d.edge_process||0,
+      edge_unload_H_min: d.edge_unload||0,
+      note: d.note||'',
+      millingStages: (d.millingStages||[]).map(ms=>({ id: ms.id, machine: ms.machine, mill_load_min: ms.load, mill_process_min: ms.process, mill_unload_min: ms.unload }))
     }));
     const exportObj = { units: project.units, policy: project.policy, orders, deliveries, stones, sawPrograms, details };
 
-    // --- HTML + Excel ---
+    // 4) запрос на бэк
     const resp = await fetch(`${BASE}/optimize/html-file`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify(exportObj)
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(exportObj)
     });
     if (!resp.ok) throw new Error('Сервис вернул ошибку (html-file)');
 
     const data = await resp.json();
 
-    // Всегда переводим окно на сгенерированный URL витрины
+    // 5) переводим окно на витрину с флагом автоскачивания
     let previewPath = (data.url || '/ui/gantt_schedule.html');
     previewPath += (previewPath.includes('?') ? '&' : '?') + 'dl=1';
     const url = resolveUrl(previewPath);
+
     if (preview && !preview.closed) {
       preview.location.replace(url);
       try { preview.focus(); } catch {}
     } else {
-      window.location.assign(url); // без второй window.open — не провоцируем блокировку
+      window.open(url, '_blank', 'noopener'); // запасной путь без блокировок
     }
 
-} catch (e) {
+  } catch (e) {
     alert('Ошибка расчёта: ' + e.message + '\nПроверьте доступность: ' + BASE + '/ping');
-    if (preview && !preview.closed) preview.close();
-} finally {
-    // --- вернуть кнопку в норму ---
+    if (preview && !preview.closed) try { preview.close(); } catch {}
+  } finally {
     btn.disabled = false;
     btn.innerHTML = btn.dataset.prev || 'Расчёт плана';
-}
+  }
 });
 
 $('#btn-reset').addEventListener('click', ()=>{
