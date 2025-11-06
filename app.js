@@ -941,8 +941,15 @@ btn.innerHTML = '⏳ Идёт расчёт…';
 
 const BASE = (window.ENV && window.ENV.API_BASE) || "https://d5dbceei9enp79259un2.z7jmlavt.apigw.yandexcloud.net";
 
+const resolveUrl = (u) => {
+  if (!u) return '';
+  // починим редкий баг "https//" → "https://"
+  const fixed = u.replace(/^https(?!:)/, 'https:').replace(/^http(?!:)/, 'http:');
+  try { return new URL(fixed, BASE).href; } catch { return fixed; }
+};
+
 // 1) Открываем вкладку синхронно — браузер не заблокирует
-const preview = window.open('', '_blank');
+const preview = window.open('about:blank', '_blank', 'noopener');
 if (preview) {
     preview.document.write(`
     <!doctype html><meta charset="utf-8">
@@ -1006,17 +1013,19 @@ try {
       preview.document.write(data.html);
       preview.document.close();
     } else {
-        const url = /^https?:\/\//i.test(data.url) ? data.url : `${BASE}${data.url}`;
+        const url = resolveUrl(data.url || '/ui/gantt_schedule.html');
         if (preview) preview.location.replace(url);
         else window.open(url, '_blank', 'noopener');
     }
 
     // Сразу качаем Excel ИМЕННО того же расчёта
     if (data.excel_url) {
-    const a = document.createElement('a');
-    a.href = `${BASE}${data.excel_url}`;
-    a.download = 'schedule.xlsx';
-    document.body.appendChild(a); a.click(); a.remove();
+      const href = resolveUrl(data.excel_url);
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.src = href;        // запускает скачивание
+      document.body.appendChild(iframe);
+      setTimeout(() => iframe.remove(), 60000);
     }
 
 } catch (e) {
