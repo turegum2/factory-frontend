@@ -1006,17 +1006,10 @@ try {
 
     const data = await resp.json();
 
-    // Обновляем окно: если бэк дал готовый HTML — рисуем его inline,
-    // иначе открываем ссылку на файл в витрине /ui/...
-    if (data.html && preview) {
-      preview.document.open();
-      preview.document.write(data.html);
-      preview.document.close();
-    } else {
-        const url = resolveUrl(data.url || '/ui/gantt_schedule.html');
-        if (preview) preview.location.replace(url);
-        else window.open(url, '_blank', 'noopener');
-    }
+    // Всегда переводим окно на сгенерированный URL витрины
+    const url = resolveUrl(data.url || '/ui/gantt_schedule.html');
+    if (preview) preview.location.replace(url);
+    else window.open(url, '_blank', 'noopener');
 
     // Сразу качаем Excel ИМЕННО того же расчёта
     if (data.excel_url) {
