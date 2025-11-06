@@ -949,7 +949,7 @@ const resolveUrl = (u) => {
 };
 
 // 1) Открываем вкладку синхронно — браузер не заблокирует
-const preview = window.open('about:blank', '_blank', 'noopener');
+const preview = window.open('about:blank', 'optimizer_preview');
 if (preview) {
     preview.document.write(`
     <!doctype html><meta charset="utf-8">
@@ -1008,8 +1008,12 @@ try {
 
     // Всегда переводим окно на сгенерированный URL витрины
     const url = resolveUrl(data.url || '/ui/gantt_schedule.html');
-    if (preview) preview.location.replace(url);
-    else window.open(url, '_blank', 'noopener');
+    if (preview && !preview.closed) {
+      preview.location.replace(url);
+      try { preview.focus(); } catch {}
+    } else {
+      window.location.assign(url); // без второй window.open — не провоцируем блокировку
+    }
 
     // Сразу качаем Excel ИМЕННО того же расчёта
     if (data.excel_url) {
