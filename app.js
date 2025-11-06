@@ -1007,22 +1007,14 @@ try {
     const data = await resp.json();
 
     // Всегда переводим окно на сгенерированный URL витрины
-    const url = resolveUrl(data.url || '/ui/gantt_schedule.html');
+    let previewPath = (data.url || '/ui/gantt_schedule.html');
+    previewPath += (previewPath.includes('?') ? '&' : '?') + 'dl=1';
+    const url = resolveUrl(previewPath);
     if (preview && !preview.closed) {
       preview.location.replace(url);
       try { preview.focus(); } catch {}
     } else {
       window.location.assign(url); // без второй window.open — не провоцируем блокировку
-    }
-
-    // Сразу качаем Excel ИМЕННО того же расчёта
-    if (data.excel_url) {
-      const href = resolveUrl(data.excel_url);
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.src = href;        // запускает скачивание
-      document.body.appendChild(iframe);
-      setTimeout(() => iframe.remove(), 60000);
     }
 
 } catch (e) {
