@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-store, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <link rel="icon" href="./favicon.ico?v=5" sizes="any">
+  <link rel="shortcut icon" href="./favicon.ico?v=5">
+  <link rel="icon" type="image/png" sizes="192x192" href="./favicon-192.png?v=5">
+  <link rel="icon" type="image/png" sizes="512x512" href="./favicon-512.png?v=5">
+  <link rel="apple-touch-icon" sizes="180x180" href="./favicon-192.png?v=5">
+  <link rel="stylesheet" href="./app.css?v=11">
+  <title>Планировщик производства — Система управления</title>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="header-content">
+        <div>
+          <h1>
+            <div class="logo">🏭</div>
+            <div>
+              <div>Планировщик производства</div>
+              <div class="subtitle">Система оптимизации производственных процессов</div>
+            </div>
+          </h1>
+        </div>
+        <div class="header-actions">
+          <button id="btn-help" class="btn secondary">
+            <span>💡</span> Справка
+          </button>
+          <button id="btn-reset" class="btn ghost">
+            <span>✕</span> Очистить
+          </button>
+          <input id="file-json" type="file" accept="application/json" style="display:none">
+          <button id="btn-import-json" class="btn secondary">
+            <span>📂</span> Загрузить
+          </button>
+          <button id="btn-export-json" class="btn secondary">
+            <span>💾</span> Сохранить
+          </button>
+          <button id="btn-optimize" class="btn success">
+            <span>▶</span> Расчёт плана
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <div class="main-card">
+      <div class="tabs-container">
+        <button class="tab active" data-tab="orders">
+          <span class="tab-icon">📦</span> Заказы и доставки
+        </button>
+        <button class="tab" data-tab="stones">
+          <span class="tab-icon">💎</span> Камни и распил
+        </button>
+        <button class="tab" data-tab="details">
+          <span class="tab-icon">⚙️</span> Детали и обработка
+        </button>
+        <button class="tab" data-tab="export">
+          <span class="tab-icon">📊</span> Настройки и статистика
+        </button>
+      </div>
+
+      <section id="tab-orders" class="section active">
+        <div class="card">
+          <h3>➕ Добавить новый заказ</h3>
+          <div class="grid g3">
+            <div>
+              <label>Номер заказа</label>
+              <input id="new-order-id" type="text" placeholder="Например: 7000" />
+            </div>
+            <div>
+              <label>Приоритет</label>
+              <label style="display:flex;align-items:center;gap:8px;margin-top:6px">
+                <input id="new-order-prio-flag" type="checkbox">
+                Приоритетный заказ
+              </label>
+            </div>
+            <div class="row row-end">
+              <button id="btn-add-order" class="btn">
+                <span>➕</span> Добавить заказ
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div id="orders-list" class="list" style="margin-top:16px"></div>
+        
+        <div class="hr"></div>
+        
+        <div class="card" id="delivery-composer">
+          <h3>🚚 Создать доставку</h3>
+          <div class="info-box">
+            💡 В одной доставке можно привезти камни для разных заказов
+          </div>
+          <div id="del-lines"></div>
+          <div class="row" style="margin-top:12px">
+            <button class="btn small secondary" id="btn-add-del-line">
+              <span>➕</span> Добавить строку доставки
+            </button>
+          </div>
+          <div class="grid g3" style="margin-top:16px">
+            <div>
+              <label>Время доставки (минуты)</label>
+              <input type="number" id="del-duration" value="0" min="0">
+            </div>
+            <div class="row row-end">
+              <button class="btn success" id="btn-create-delivery">
+                <span>✅</span> Создать доставку
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <div class="hr"></div>
+        
+        <h3 style="margin: 20px 0 12px; font-size: 18px; font-weight: 600;">📦 Существующие доставки</h3>
+        <div id="deliveries-list" class="list"></div>
+      </section>
+
+      <section id="tab-stones" class="section">
+        <div class="info-box">
+          💡 Здесь настраиваются программы распила камней на пиле. Из одного камня может получиться несколько деталей
+        </div>
+        <div id="stones-list" class="list"></div>
+      </section>
+
+      <section id="tab-details" class="section">
+        <div class="info-box">
+          💡 После распила детали могут проходить кромку и фрезеровку на разных станках
+        </div>
+        <div id="details-list" class="list"></div>
+      </section>
+
+      <section id="tab-export" class="section">
+        <div class="grid g2">
+          <div class="card">
+            <h3>📊 Статистика проекта</h3>
+            <div id="summary" class="stats-grid"></div>
+          </div>
+          <div class="card">
+            <h3>⚙️ Настройки расчёта</h3>
+            <div class="help">Для будущего применения</div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+  <script src="./config.js?v=1"></script>
+  <script src="./app.js?v=11" defer></script>
+</body>
+</html>
