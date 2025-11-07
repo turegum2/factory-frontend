@@ -41,6 +41,27 @@ function load(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)); }catch(e)
 const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
 
+// --- Network util: fetch с автоповторами для 502/503/504 + сетевых ошибок ---
+async function fetchRetry(url, opts = {}, tries = 3, backoff = 300) {
+  for (let i = 0; i < tries; i++) {
+    try {
+      const r = await fetch(url, opts);
+      if (r.ok) return r;
+      // Повторяем только временные «апстрим» ошибки
+      const retryable = [502, 503, 504, 520, 522, 524];
+      if (!retryable.includes(r.status)) {
+        throw new Error(`HTTP ${r.status}`);
+      }
+    } catch (err) {
+      // Сетевые ошибки/abort тоже пробуем повторить
+      if (i === tries - 1) throw err;
+    }
+    await new Promise(r => setTimeout(r, backoff));
+    backoff *= 2;
+  }
+  throw new Error('temporary upstream error');
+}
+
 function nextOrderId(){
 const ids = Object.keys(project.orders).map(x=>parseInt(x)).filter(x=>!isNaN(x));
 return ids.length? Math.max(...ids)+1 : 1;
@@ -971,7 +992,7 @@ document.getElementById('btn-optimize').addEventListener('click', async ()=>{
       try { if (preview) preview.location.replace('about:blank'); } catch {}
       // небольшой retry, если навигация ещё не применилась
       await new Promise(r=>setTimeout(r,100));
-      try { if (preview) { preview.document.open(); preview.document.write(spinnerHub); preview.document.close(); } } catch {}
+      try { if (preview) { preview.document.open(); preview.document.write(spinnerHtml); preview.document.close(); } } catch {}
     }
 
     // 3) собираем payload
@@ -998,12 +1019,11 @@ document.getElementById('btn-optimize').addEventListener('click', async ()=>{
     const exportObj = { units: project.units, policy: project.policy, orders, deliveries, stones, sawPrograms, details };
 
     // 4) запрос на бэк
-    const resp = await fetch(`${BASE}/optimize/html-file`, {
+    const resp = await fetchRetry(`${BASE}/optimize/html-file`, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify(exportObj)
-    });
-    if (!resp.ok) throw new Error('Сервис вернул ошибку (html-file)');
+    }, 3, 400);
 
     const data = await resp.json();
 
