@@ -938,11 +938,6 @@ document.getElementById('btn-optimize').addEventListener('click', async ()=>{
   btn.innerHTML = '⏳ Идёт расчёт…';
 
   const BASE = (window.ENV && window.ENV.API_BASE) || "https://d5dbceei9enp79259un2.z7jmlavt.apigw.yandexcloud.net";
-  const resolveUrl = (u) => {
-    if (!u) return '';
-    const fixed = u.replace(/^https(?!:)/, 'https:').replace(/^http(?!:)/, 'http:');
-    try { return new URL(fixed, BASE).href; } catch { return fixed; }
-  };
 
   const spinnerHtml = `
     <!doctype html><meta charset="utf-8">
@@ -1012,16 +1007,22 @@ document.getElementById('btn-optimize').addEventListener('click', async ()=>{
 
     const data = await resp.json();
 
-    // 5) переводим окно на витрину с флагом автоскачивания
-    let previewPath = (data.url || '/ui/gantt_schedule.html');
-    previewPath += (previewPath.includes('?') ? '&' : '?') + 'dl=1';
-    const url = resolveUrl(previewPath);
+    // 5) открываем HTML из Object Storage
+    let url = data.html_url || '';
+    if (!url && data.html) {
+      // резерв: отрисовать то, что пришло, через Blob
+      const blob = new Blob([data.html], {type:'text/html;charset=utf-8'});
+      url = URL.createObjectURL(blob);
+    }
+    if (!url) throw new Error('Сервис не вернул ссылку на HTML');
 
+    // Признак авто-скачивания Excel — через hash, чтобы не ломать подпись пресайна
+    const finalUrl = url + (url.includes('#') ? '' : '#dl=1');
     if (preview && !preview.closed) {
-      preview.location.replace(url);
+      preview.location.replace(finalUrl);
       try { preview.focus(); } catch {}
     } else {
-      window.open(url, '_blank', 'noopener'); // запасной путь без блокировок
+      window.open(finalUrl, '_blank', 'noopener');
     }
 
   } catch (e) {
