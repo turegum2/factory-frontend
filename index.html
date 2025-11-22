@@ -27,6 +27,7 @@
             </div>
           </h1>
         </div>
+
         <div class="header-actions">
           <button id="btn-help" class="btn secondary">
             💡 Справка
@@ -37,14 +38,15 @@
           <button id="btn-import" class="btn secondary">
             ⬆ Загрузить
           </button>
-          <input type="file" id="file-json" accept=".json" style="display:none">
           <button id="btn-export" class="btn secondary">
             💾 Сохранить
           </button>
           <button id="btn-optimize" class="btn success">
             ▶ Расчёт плана
           </button>
+        </div>
 
+        <div class="header-user">
           <div id="user-widget" class="user-widget hidden">
             <button id="user-menu-toggle" type="button" class="user-pill">
               <span id="user-name"></span>
@@ -62,7 +64,6 @@
         </div>
       </div>
     </header>
-
     <div class="main-card">
       <div class="tabs-container">
         <button class="tab active" data-tab="orders">
