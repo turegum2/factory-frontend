@@ -23,82 +23,143 @@
     }
     });
 })();
-// ---------- Data Model ----------
+// ---------- Data Model + Auth ----------
+
+// ключи для локального состояния
 const LS_KEY = 'fjssp-spa';
 const AUTH_LS_KEY = 'fjssp-auth';
-const API_BASE = (window.ENV && window.ENV.API_BASE) || "https://d5dbceei9enp79259un2.z7jmlavt.apigw.yandexcloud.net";
+
+// базовый URL бэкенда (через API Gateway)
+const API_BASE =
+  (window.ENV && window.ENV.API_BASE) ||
+  "https://d5dbceei9enp79259un2.z7jmlavt.apigw.yandexcloud.net";
+
+// хранение/загрузка проекта
+function persist() {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(project));
+  } catch (e) {
+    console.warn('persist error', e);
+  }
+}
+
+function load() {
+  try {
+    return JSON.parse(localStorage.getItem(LS_KEY));
+  } catch (e) {
+    return null;
+  }
+}
+
+// сам объект проекта
 const project = load() || {
-units: 'minutes',
-policy: { priority_objective: 'lexicographic' }, // по умолчанию строгие приоритеты
-orders: {},       // id -> {id, priority, deliveryIds:[], stoneIds:[]}
-deliveries: {},   // id -> {id, duration, lines:[{orderId, qty}], stoneIds:[]}
-stones: {},       // id -> {id, orderId, deliveryId, sawPrograms:[]}
-sawPrograms: {},  // id -> {id, stoneId, load, process, unload, details:[]}
-details: {},      // id -> {id, stoneId, sourceProgId, note, edgeNeeded, edge_load, edge_process, edge_unload, millingStages:[{id,machine,load,process,unload}]}
+  units: 'minutes',
+  policy: { priority_objective: 'lexicographic' }, // по умолчанию строгие приоритеты
+  orders: {},       // id -> {id, priority, deliveryIds:[], stoneIds:[]}
+  deliveries: {},   // id -> {id, duration, lines:[{orderId, qty}], stoneIds:[]}
+  stones: {},       // id -> {id, orderId, deliveryId, sawPrograms:[]}
+  sawPrograms: {},  // id -> {id, stoneId, load, process, unload, details:[]}
+  details: {},      // id -> {id, stoneId, sourceProgId, note, edgeNeeded, edge_load, edge_process, edge_unload,
+                    //        millingStages:[{id,machine,load,process,unload}]}
 };
 
-function persist(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(project)); }catch(e){} }
-function load(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)); }catch(e){ return null; } }
-
-const $ = s => document.querySelector(s);
+// короткие алиасы для поиска элементов
+const $  = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
 
+// ---------- Auth state ----------
+
 function loadAuth() {
-  try { return JSON.parse(localStorage.getItem(AUTH_LS_KEY)); } catch(e) { return null; }
+  try {
+    const raw = localStorage.getItem(AUTH_LS_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    console.warn('auth load error', e);
+    return null;
+  }
 }
+
 function saveAuth(state) {
-  if (state) localStorage.setItem(AUTH_LS_KEY, JSON.stringify(state));
-  else localStorage.removeItem(AUTH_LS_KEY);
+  if (!state) {
+    localStorage.removeItem(AUTH_LS_KEY);
+  } else {
+    localStorage.setItem(AUTH_LS_KEY, JSON.stringify(state));
+  }
 }
+
+// текущее состояние авторизации
 let authState = loadAuth();
+
+// токен живой?
 function isAuthValid() {
   if (!authState || !authState.access_token) return false;
-  // если бэк в токен кладёт exp (unix-время в секундах) – проверяем ещё и его
   if (authState.exp && Date.now() > authState.exp * 1000) return false;
   return true;
 }
 
-function updateAuthUI(){
-  const info = $('#auth-info');
-  const btnLogin = $('#btn-login');
+// обновить надпись в шапке + кнопки + заблокировать интерфейс при отсутствии авторизации
+function updateAuthUI() {
+  const info      = $('#auth-info');
+  const btnLogin  = $('#btn-login');
   const btnLogout = $('#btn-logout');
   const userAdminWrapper = $('#user-admin-wrapper');
-  if (!info || !btnLogin || !btnLogout) return;
+  const mainCard  = document.querySelector('.main-card');
 
-  if (isAuthValid()) {
-    const roleLabel = authState.role === 'admin' ? 'админ' : 'пользователь';
-    info.textContent = `👤 ${authState.username} (${roleLabel})`;
-    btnLogin.style.display = 'none';
-    btnLogout.style.display = 'inline-flex';
+  const ok = isAuthValid();
 
-    if (authState.role === 'admin') {
-      if (userAdminWrapper) {
-        userAdminWrapper.style.display = 'block';
-        renderUserAdmin();
-      }
-    } else {
-      if (userAdminWrapper) userAdminWrapper.style.display = 'none';
-    }
-  } else {
-    // если токен невалиден — выбиваем из авторизации
+  if (!ok) {
     authState = null;
     saveAuth(null);
+  }
 
+  if (info) {
+    if (ok) {
+    const roleLabel = authState.role === 'admin' ? 'админ' : 'пользователь';
+    let suffix = '';
+    if (authState.must_change_password) {
+        suffix = ' — требуется смена пароля';
+    }
+    info.textContent = `👤 ${authState.username} (${roleLabel})${suffix}`;
+    } else {
     info.textContent = 'Не авторизован';
-    btnLogin.style.display = 'inline-flex';
-    btnLogout.style.display = 'none';
-    if (userAdminWrapper) userAdminWrapper.style.display = 'none';
+    }
+  }
+
+  if (btnLogin)  btnLogin.style.display  = ok ? 'none' : 'inline-flex';
+  if (btnLogout) btnLogout.style.display = ok ? 'inline-flex' : 'none';
+
+  if (userAdminWrapper) {
+    if (ok && authState.role === 'admin') {
+      userAdminWrapper.style.display = 'block';
+      if (typeof renderUserAdmin === 'function') renderUserAdmin();
+    } else {
+      userAdminWrapper.style.display = 'none';
+    }
+  }
+
+  // заблокировать основную карточку, если не авторизован
+  if (mainCard) {
+    mainCard.classList.toggle('app-locked', !ok);
   }
 }
 
-function showLoginModal(){
+// показать / спрятать модалку логина
+function showLoginModal() {
   const modal = $('#login-modal');
   if (!modal) return;
   modal.classList.remove('hidden');
-  $('#login-error').style.display = 'none';
-  $('#login-username').focus();
+
+  const err = $('#login-error');
+  if (err) {
+    err.textContent = '';
+    err.style.display = 'none';
+  }
+
+  const u = $('#login-username');
+  if (u) u.focus();
 }
-function hideLoginModal(){
+
+function hideLoginModal() {
   const modal = $('#login-modal');
   if (!modal) return;
   modal.classList.add('hidden');
@@ -106,59 +167,83 @@ function hideLoginModal(){
   if (pass) pass.value = '';
 }
 
-$('#btn-login')?.addEventListener('click', showLoginModal);
-$('#btn-login-cancel')?.addEventListener('click', hideLoginModal);
+// --- Обработчики логина/логаута ---
 
-async function performLogin(){
-  const uEl = $('#login-username');
-  const pEl = $('#login-password');
+async function performLogin() {
+  const uEl  = $('#login-username');
+  const pEl  = $('#login-password');
   const errEl = $('#login-error');
   if (!uEl || !pEl || !errEl) return;
+
   const username = uEl.value.trim();
   const password = pEl.value;
+
   if (!username || !password) {
     errEl.textContent = 'Укажите логин и пароль';
     errEl.style.display = 'block';
     return;
   }
+
   errEl.style.display = 'none';
+
   try {
     const resp = await fetch(`${API_BASE}/auth/login`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
+      method: 'POST',
+      headers: { 'Content-Type':'application/json' },
       body: JSON.stringify({ username, password }),
     });
+
     if (!resp.ok) {
       errEl.textContent = 'Неверный логин или пароль';
       errEl.style.display = 'block';
       return;
     }
+
     const data = await resp.json();
     authState = {
       access_token: data.access_token,
       username: data.username,
       role: data.role,
       exp: data.exp,
+      must_change_password: !!data.must_change_password,
     };
     saveAuth(authState);
     hideLoginModal();
     updateAuthUI();
+
+    // позже сюда можно прикрутить принудительную смену пароля
+    // if (authState.must_change_password) showPasswordModal();
   } catch (e) {
+    console.error('login error', e);
     errEl.textContent = 'Ошибка сети при входе';
     errEl.style.display = 'block';
   }
 }
 
+function logout() {
+  authState = null;
+  saveAuth(null);
+  updateAuthUI();
+  showLoginModal();
+}
+
+// подписываем кнопки
+$('#btn-login')?.addEventListener('click', showLoginModal);
+
+$('#btn-login-cancel')?.addEventListener('click', () => {
+  // отменять можно только если уже авторизован, иначе остаёмся на логине
+  if (isAuthValid()) {
+    hideLoginModal();
+  }
+});
+
 $('#btn-login-submit')?.addEventListener('click', performLogin);
+
 $('#login-password')?.addEventListener('keydown', e => {
   if (e.key === 'Enter') performLogin();
 });
 
-$('#btn-logout')?.addEventListener('click', () => {
-  authState = null;
-  saveAuth(null);
-  updateAuthUI();
-});
+$('#btn-logout')?.addEventListener('click', logout);
 
 // --- Network util: fetch с автоповторами для 502/503/504 + сетевых ошибок ---
 async function fetchRetry(url, opts = {}, tries = 3, backoff = 300) {
@@ -914,6 +999,11 @@ cells.forEach(([icon, label, value])=>{
 // ---------- User Management ----------
 
 async function renderUserAdmin(){
+  if (!isAuthValid() || !authState || authState.role !== 'admin') return;
+  if (authState.must_change_password) {
+    // админ с временным паролем — не даём лазить в user-management
+    return;
+  }
   const container = $('#user-admin-content');
   if (!container) return;
   if (!authState || authState.role !== 'admin') {
@@ -986,7 +1076,7 @@ async function renderUserAdmin(){
     `;
 
     $('#btn-create-user')?.addEventListener('click', createUserFromForm);
-    container.addEventListener('click', handleUserAdminClicks);
+    container.onclick = handleUserAdminClicks;
   } catch (e) {
     container.innerHTML = '<div class="help">Ошибка сети при загрузке пользователей</div>';
   }
@@ -1084,8 +1174,13 @@ async function handleUserAdminClicks(e){
 
 function ensureAuth() {
   if (!isAuthValid()) {
-    alert('Для работы с планировщиком нужно войти в систему');
     showLoginModal();
+    return false;
+  }
+  if (authState && authState.must_change_password) {
+    alert('Перед работой нужно сменить временный пароль.');
+    // сюда позже можно подвесить модалку смены пароля
+    // showPasswordModal();
     return false;
   }
   return true;
@@ -1256,12 +1351,8 @@ document.getElementById('btn-optimize').addEventListener('click', async ()=>{
   const btn = document.getElementById('btn-optimize');
   if (btn.disabled) return;
 
-  // проверка авторизации
-  if (!authState || !authState.access_token) {
-    alert('Для расчёта плана нужно войти в систему');
-    showLoginModal();
-    return;
-  }
+  // Требуем авторизацию + отсутствие флага must_change_password
+  if (!ensureAuth()) return;
 
   btn.disabled = true;
   btn.dataset.prev = btn.innerHTML;
@@ -1387,7 +1478,8 @@ function renderAll(){
 window.deliveryLines = [];
 renderAll();
 
-// если нет действующей авторизации — сразу показываем модальное окно логина
+// после отрисовки подтягиваем состояние авторизации
+updateAuthUI();
 if (!isAuthValid()) {
-  showLoginModal();
+  showLoginModal();   // модалка логина сразу поверх, пока токена нет
 }
