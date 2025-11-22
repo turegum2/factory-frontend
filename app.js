@@ -174,6 +174,109 @@ function hideLoginModal() {
   if (pass) pass.value = '';
 }
 
+// --- Модалка смены пароля ---
+
+function showPasswordModal() {
+  const modal = $('#pw-modal');
+  if (!modal) {
+    console.error('showPasswordModal: #pw-modal not found');
+    return;
+  }
+  modal.classList.remove('hidden');
+
+  const err = $('#pw-error');
+  if (err) {
+    err.textContent = '';
+    err.style.display = 'none';
+  }
+
+  const oldInput = $('#pw-old');
+  if (oldInput) oldInput.focus();
+}
+
+function hidePasswordModal() {
+  const modal = $('#pw-modal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+
+  ['#pw-old', '#pw-new', '#pw-new2'].forEach(sel => {
+    const el = $(sel);
+    if (el) el.value = '';
+  });
+}
+
+async function performPasswordChange() {
+  const oldEl  = $('#pw-old');
+  const newEl  = $('#pw-new');
+  const new2El = $('#pw-new2');
+  const errEl  = $('#pw-error');
+  if (!oldEl || !newEl || !new2El || !errEl) {
+    console.error('performPasswordChange: missing elements');
+    return;
+  }
+
+  const old_password = oldEl.value;
+  const new_password = newEl.value;
+  const new2         = new2El.value;
+
+  if (!old_password || !new_password || !new2) {
+    errEl.textContent = 'Заполните все поля';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (new_password !== new2) {
+    errEl.textContent = 'Новый пароль и подтверждение не совпадают';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (new_password.length < 8) {
+    errEl.textContent = 'Новый пароль должен быть не короче 8 символов';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  errEl.style.display = 'none';
+
+  try {
+    const resp = await fetch(`${API_BASE}/auth/change-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authState?.access_token || ''}`,
+      },
+      body: JSON.stringify({ old_password, new_password }),
+    });
+
+    if (!resp.ok) {
+      let msg = 'Ошибка смены пароля';
+      try {
+        const errJson = await resp.json();
+        if (errJson && errJson.detail) msg = errJson.detail;
+      } catch (_) {}
+      errEl.textContent = msg;
+      errEl.style.display = 'block';
+      return;
+    }
+
+    const data = await resp.json();
+    authState = {
+      access_token: data.access_token,
+      username: data.username,
+      role: data.role,
+      exp: data.exp,
+      must_change_password: !!data.must_change_password, // на бэке False
+    };
+    saveAuth(authState);
+    hidePasswordModal();
+    updateAuthUI();
+    alert('Пароль успешно изменён. Можно работать с системой.');
+  } catch (e) {
+    console.error('password change error', e);
+    errEl.textContent = 'Ошибка сети при смене пароля';
+    errEl.style.display = 'block';
+  }
+}
+
 // --- Обработчики логина/логаута ---
 
 async function performLogin() {
@@ -222,8 +325,9 @@ async function performLogin() {
     hideLoginModal();
     updateAuthUI();
 
-    // позже сюда можно прикрутить принудительную смену пароля
-    // if (authState.must_change_password) showPasswordModal();
+    if (authState.must_change_password) {
+      showPasswordModal();
+    }
   } catch (e) {
     console.error('login error', e);
     errEl.textContent = 'Ошибка сети при входе';
@@ -284,6 +388,24 @@ function initAuthEventListeners() {
   }
 
   console.log('Auth event listeners initialized');
+}
+
+// Регистрация обработчиков смены пароля
+function initPasswordChangeListeners() {
+  const btnPw = $('#btn-pw-submit');
+  const pwNew2 = $('#pw-new2');
+
+  if (btnPw) {
+    btnPw.addEventListener('click', performPasswordChange);
+  } else {
+    console.warn('initPasswordChangeListeners: #btn-pw-submit not found');
+  }
+
+  if (pwNew2) {
+    pwNew2.addEventListener('keydown', e => {
+      if (e.key === 'Enter') performPasswordChange();
+    });
+  }
 }
 
 // --- Network util: fetch с автоповторами для 502/503/504 + сетевых ошибок ---
@@ -1219,9 +1341,7 @@ function ensureAuth() {
     return false;
   }
   if (authState && authState.must_change_password) {
-    alert('Перед работой нужно сменить временный пароль.');
-    // сюда позже можно подвесить модалку смены пароля
-    // showPasswordModal();
+    showPasswordModal();
     return false;
   }
   return true;
@@ -1519,14 +1639,19 @@ function renderAll(){
 window.deliveryLines = [];
 renderAll();
 
-// инициализация обработчиков авторизации после загрузки DOM
+// инициализация обработчиков после загрузки DOM
 initAuthEventListeners();
+initPasswordChangeListeners();
 
-// после отрисовки подтягиваем состояние авторизации
+// подтягиваем состояние авторизации
 updateAuthUI();
+
 if (!isAuthValid()) {
   console.log('User not authenticated, showing login modal');
-  showLoginModal();   // модалка логина сразу поверх, пока токена нет
+  showLoginModal();
 } else {
   console.log('User authenticated:', authState.username);
+  if (authState && authState.must_change_password) {
+    showPasswordModal();
+  }
 }
