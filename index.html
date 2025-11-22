@@ -28,30 +28,35 @@
           </h1>
         </div>
         <div class="header-actions">
-          <span id="auth-info" class="subtitle" style="font-size:13px; min-width:140px;">
-            Не авторизован
-          </span>
-          <button id="btn-login" class="btn secondary">
-            <span>🔐</span> Войти
-          </button>
-          <button id="btn-logout" class="btn ghost" style="display:none;">
-            <span>🚪</span> Выйти
-          </button>
           <button id="btn-help" class="btn secondary">
-            <span>💡</span> Справка
+            💡 Справка
           </button>
-          <button id="btn-reset" class="btn ghost">
-            <span>✕</span> Очистить
+          <button id="btn-clear" class="btn secondary">
+            ✖ Очистить
           </button>
-          <input id="file-json" type="file" accept="application/json" style="display:none">
-          <button id="btn-import-json" class="btn secondary">
-            <span>📂</span> Загрузить
+          <button id="btn-import" class="btn secondary">
+            ⬆ Загрузить
           </button>
-          <button id="btn-export-json" class="btn secondary">
-            <span>💾</span> Сохранить
+          <button id="btn-export" class="btn secondary">
+            💾 Сохранить
           </button>
           <button id="btn-optimize" class="btn success">
-            <span>▶</span> Расчёт плана
+            ▶ Расчёт плана
+          </button>
+
+          <div id="user-widget" class="user-widget hidden">
+            <button id="user-menu-toggle" type="button" class="user-pill">
+              <span id="user-name"></span>
+              <span class="user-menu-arrow">▾</span>
+            </button>
+            <div id="user-menu-dropdown" class="user-menu-dropdown hidden">
+              <button id="user-change-password" type="button">Сменить пароль</button>
+              <button id="user-logout" type="button">Выйти</button>
+            </div>
+          </div>
+
+          <button id="btn-login" class="btn secondary">
+            🔐 Войти
           </button>
         </div>
       </div>

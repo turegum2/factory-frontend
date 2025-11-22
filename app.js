@@ -98,51 +98,39 @@ function isAuthValid() {
 }
 
 // обновить надпись в шапке + кнопки + заблокировать интерфейс при отсутствии авторизации
-function updateAuthUI() {
-  const info      = $('#auth-info');
-  const btnLogin  = $('#btn-login');
-  const btnLogout = $('#btn-logout');
+function updateAuthUI(){
+  const btnLogin = $('#btn-login');
+  const userWidget = $('#user-widget');
+  const userNameSpan = $('#user-name');
   const userAdminWrapper = $('#user-admin-wrapper');
-  const mainCard  = document.querySelector('.main-card');
 
   const ok = isAuthValid();
-
   if (!ok) {
     authState = null;
     saveAuth(null);
   }
 
-  if (info) {
-    if (ok) {
-    const roleLabel = authState.role === 'admin' ? 'админ' : 'пользователь';
-    let suffix = '';
-    if (authState.must_change_password) {
-        suffix = ' — требуется смена пароля';
-    }
-    info.textContent = `👤 ${authState.username} (${roleLabel})${suffix}`;
-    } else {
-    info.textContent = 'Не авторизован';
-    }
-  }
+  if (!btnLogin || !userWidget) return;
 
-  if (btnLogin)  btnLogin.style.display  = ok ? 'none' : 'inline-flex';
-  if (btnLogout) btnLogout.style.display = ok ? 'inline-flex' : 'none';
+  if (ok && authState) {
+    btnLogin.style.display = 'none';
+    userWidget.classList.remove('hidden');
+    if (userNameSpan) userNameSpan.textContent = authState.username;
 
-  if (userAdminWrapper) {
-    if (ok && authState.role === 'admin') {
-      userAdminWrapper.style.display = 'block';
-      if (typeof renderUserAdmin === 'function') renderUserAdmin();
-    } else {
+    if (authState.role === 'admin') {
+      if (userAdminWrapper) {
+        userAdminWrapper.style.display = 'block';
+        renderUserAdmin();
+      }
+    } else if (userAdminWrapper) {
       userAdminWrapper.style.display = 'none';
     }
-  }
-
-  // заблокировать основную карточку, если не авторизован
-  if (mainCard) {
-    mainCard.classList.toggle('app-locked', !ok);
-    console.log('App locked state:', !ok);
   } else {
-    console.warn('updateAuthUI: .main-card not found');
+    btnLogin.style.display = 'inline-flex';
+    userWidget.classList.add('hidden');
+    const dd = $('#user-menu-dropdown');
+    if (dd) dd.classList.add('hidden');
+    if (userAdminWrapper) userAdminWrapper.style.display = 'none';
   }
 }
 
@@ -348,7 +336,6 @@ function initAuthEventListeners() {
   const btnLoginCancel = $('#btn-login-cancel');
   const btnLoginSubmit = $('#btn-login-submit');
   const loginPassword = $('#login-password');
-  const btnLogout = $('#btn-logout');
 
   if (btnLogin) {
     btnLogin.addEventListener('click', showLoginModal);
@@ -381,12 +368,6 @@ function initAuthEventListeners() {
     console.warn('initAuthEventListeners: #login-password not found');
   }
 
-  if (btnLogout) {
-    btnLogout.addEventListener('click', logout);
-  } else {
-    console.warn('initAuthEventListeners: #btn-logout not found');
-  }
-
   console.log('Auth event listeners initialized');
 }
 
@@ -404,6 +385,55 @@ function initPasswordChangeListeners() {
   if (pwNew2) {
     pwNew2.addEventListener('keydown', e => {
       if (e.key === 'Enter') performPasswordChange();
+    });
+  }
+}
+
+function initUserMenu() {
+  const userWidget   = $('#user-widget');
+  const toggle       = $('#user-menu-toggle');
+  const dropdown     = $('#user-menu-dropdown');
+  const linkChangePw = $('#user-change-password');
+  const linkLogout   = $('#user-logout');
+
+  if (!userWidget || !toggle || !dropdown) {
+    console.warn('initUserMenu: user-menu elements not found');
+    return;
+  }
+
+  // открыть/закрыть меню по клику на имени пользователя / стрелке
+  toggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isOpen = !dropdown.classList.contains('hidden');
+    if (isOpen) {
+      dropdown.classList.add('hidden');
+    } else {
+      dropdown.classList.remove('hidden');
+    }
+  });
+
+  // клик вне меню — закрыть
+  document.addEventListener('click', (e) => {
+    if (!userWidget.contains(e.target)) {
+      dropdown.classList.add('hidden');
+    }
+  });
+
+  // "Сменить пароль"
+  if (linkChangePw) {
+    linkChangePw.addEventListener('click', (e) => {
+      e.preventDefault();
+      dropdown.classList.add('hidden');
+      showPasswordModal();
+    });
+  }
+
+  // "Выйти"
+  if (linkLogout) {
+    linkLogout.addEventListener('click', (e) => {
+      e.preventDefault();
+      dropdown.classList.add('hidden');
+      logout();
     });
   }
 }
@@ -1161,25 +1191,22 @@ cells.forEach(([icon, label, value])=>{
 
 // ---------- User Management ----------
 
+// ---------- User Management ----------
+
 async function renderUserAdmin(){
-  if (!isAuthValid() || !authState || authState.role !== 'admin') return;
-  if (authState.must_change_password) {
-    // админ с временным паролем — не даём лазить в user-management
-    return;
-  }
   const container = $('#user-admin-content');
   if (!container) return;
+
   if (!authState || authState.role !== 'admin') {
     container.innerHTML = '<div class="help">Доступно только администратору</div>';
     return;
   }
+
   container.innerHTML = 'Загрузка списка пользователей...';
 
   try {
     const resp = await fetch(`${API_BASE}/users`, {
-      headers: {
-        'Authorization': `Bearer ${authState.access_token}`,
-      }
+      headers: { 'Authorization': `Bearer ${authState.access_token}` },
     });
     if (!resp.ok) {
       container.innerHTML = '<div class="help">Ошибка загрузки списка пользователей</div>';
@@ -1187,20 +1214,26 @@ async function renderUserAdmin(){
     }
     const users = await resp.json();
 
-    const rows = users.map(u => `
-      <tr>
-        <td>${u.username}</td>
-        <td>${u.role}</td>
-        <td>${u.is_active ? '✅' : '⛔'}</td>
-        <td>
-          <button class="btn small secondary" data-act="edit-user" data-user="${u.username}">Изменить</button>
-          <button class="btn small danger" data-act="del-user" data-user="${u.username}">Удалить</button>
-        </td>
-      </tr>
-    `).join('');
+    const rows = users.map(u => {
+      const isBootstrapAdmin = (u.username === 'admin'); // если сменишь логин у встроенной учётки – поправь тут
+      const activeMark = u.is_active ? '✅' : '⛔';
+      const actionsHtml = isBootstrapAdmin
+        ? '<span class="help">системный</span>'
+        : `<button class="btn small danger" data-act="del-user" data-user="${u.username}">Удалить</button>`;
+
+      return `
+        <tr>
+          <td>${u.username}</td>
+          <td>${u.role}</td>
+          <td>${activeMark}</td>
+          <td>${actionsHtml}</td>
+        </tr>`;
+    }).join('');
 
     container.innerHTML = `
-      <div class="help">Создавайте пользователей и задавайте роли. Минимальный функционал: логин/пароль, роль, блокировка.</div>
+      <div class="help">
+        Создавайте пользователей для доступа к системе. Администратор создаёт только обычные учётки.
+      </div>
       <h4>Список пользователей</h4>
       <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px">
         <thead>
@@ -1215,21 +1248,14 @@ async function renderUserAdmin(){
       </table>
 
       <h4>Создать пользователя</h4>
-      <div class="grid g3" style="margin-top:8px">
+      <div class="grid g2" style="margin-top:8px">
         <div>
           <label>Логин</label>
-          <input id="new-user-login" type="text">
+          <input id="new-user-login" type="text" placeholder="user1, user2, user3...">
         </div>
         <div>
           <label>Пароль</label>
           <input id="new-user-password" type="password">
-        </div>
-        <div>
-          <label>Роль</label>
-          <select id="new-user-role">
-            <option value="user">Пользователь</option>
-            <option value="admin">Администратор</option>
-          </select>
         </div>
       </div>
       <div class="row row-end" style="margin-top:8px">
@@ -1248,16 +1274,27 @@ async function renderUserAdmin(){
 async function createUserFromForm(){
   const loginEl = $('#new-user-login');
   const passEl = $('#new-user-password');
-  const roleEl = $('#new-user-role');
   const errEl = $('#user-admin-error');
-  if (!loginEl || !passEl || !roleEl || !errEl) return;
+  if (!loginEl || !passEl || !errEl) return;
 
   const username = loginEl.value.trim();
   const password = passEl.value;
-  const role = roleEl.value;
+
+  const usernameRe = /^[A-Za-z0-9_.-]+$/;
+  const hasCyrillic = /[А-Яа-яЁё]/;
 
   if (!username || !password) {
     errEl.textContent = 'Укажите логин и пароль';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (!usernameRe.test(username)) {
+    errEl.textContent = 'Логин: только латинские буквы, цифры и символы . _ -';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (hasCyrillic.test(password)) {
+    errEl.textContent = 'Пароль не должен содержать русские буквы';
     errEl.style.display = 'block';
     return;
   }
@@ -1265,20 +1302,23 @@ async function createUserFromForm(){
 
   try {
     const resp = await fetch(`${API_BASE}/users`, {
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
         'Authorization': `Bearer ${authState.access_token}`,
       },
-      body: JSON.stringify({ username, password, role }),
+      body: JSON.stringify({ username, password }),
     });
     if (!resp.ok) {
-      const txt = await resp.text();
-      errEl.textContent = 'Ошибка создания пользователя: ' + txt;
+      let msg = 'Ошибка создания пользователя';
+      try {
+        const data = await resp.json();
+        if (data && data.detail) msg = data.detail;
+      } catch(_) {}
+      errEl.textContent = msg;
       errEl.style.display = 'block';
       return;
     }
-    // перерисовать список
     await renderUserAdmin();
   } catch (e) {
     errEl.textContent = 'Ошибка сети при создании пользователя';
@@ -1286,18 +1326,20 @@ async function createUserFromForm(){
   }
 }
 
-async function handleUserAdminClicks(e){
-  const btn = e.target.closest('[data-act]');
+async function handleUserAdminClicks(ev){
+  const btn = ev.target.closest('button[data-act]');
   if (!btn) return;
+  const act = btn.dataset.act;
   const username = btn.dataset.user;
-  if (!username) return;
+  if (!act || !username) return;
 
-  if (btn.dataset.act === 'del-user') {
+  if (act === 'del-user') {
+    if (username === 'admin') return; // доп. защита на фронте
     if (!confirm(`Удалить пользователя ${username}?`)) return;
     try {
       const resp = await fetch(`${API_BASE}/users/${encodeURIComponent(username)}`, {
-        method:'DELETE',
-        headers:{ 'Authorization': `Bearer ${authState.access_token}` },
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${authState.access_token}` },
       });
       if (!resp.ok) {
         alert('Ошибка удаления пользователя');
@@ -1306,31 +1348,6 @@ async function handleUserAdminClicks(e){
       await renderUserAdmin();
     } catch (e) {
       alert('Ошибка сети при удалении пользователя');
-    }
-  }
-
-  if (btn.dataset.act === 'edit-user') {
-    const newRole = prompt('Новая роль (admin/user, пусто — не менять):', '');
-    const block = confirm('Заблокировать пользователя? ОК = да, Отмена = нет');
-    const payload = {};
-    if (newRole) payload.role = newRole;
-    payload.is_active = !block;
-    try {
-      const resp = await fetch(`${API_BASE}/users/${encodeURIComponent(username)}`, {
-        method:'PUT',
-        headers:{
-          'Content-Type':'application/json',
-          'Authorization': `Bearer ${authState.access_token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-      if (!resp.ok) {
-        alert('Ошибка обновления пользователя');
-        return;
-      }
-      await renderUserAdmin();
-    } catch (e) {
-      alert('Ошибка сети при обновлении пользователя');
     }
   }
 }
@@ -1642,6 +1659,7 @@ renderAll();
 // инициализация обработчиков после загрузки DOM
 initAuthEventListeners();
 initPasswordChangeListeners();
+initUserMenu();
 
 // подтягиваем состояние авторизации
 updateAuthUI();

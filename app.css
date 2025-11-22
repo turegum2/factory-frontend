@@ -433,6 +433,55 @@ input[type="number"]::-webkit-outer-spin-button {
     font-weight: 500;
 }
 
+/* Стили пользователей */
+.user-widget {
+    position: relative;
+    margin-left: 12px;
+}
+
+.user-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid #d1d5db;
+    background: #f1f5f9;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.user-menu-arrow {
+    font-size: 10px;
+}
+
+.user-menu-dropdown {
+    position: absolute;
+    right: 0;
+    top: 120%;
+    min-width: 160px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    box-shadow: var(--shadow-md);
+    padding: 4px 0;
+    z-index: 30;
+}
+
+.user-menu-dropdown button {
+    width: 100%;
+    padding: 6px 12px;
+    font-size: 13px;
+    text-align: left;
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+.user-menu-dropdown button:hover {
+    background: #f3f4f6;
+}
+
 /* Статистика */
 .stats-grid {
     display: grid;
