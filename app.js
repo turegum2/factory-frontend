@@ -25,6 +25,8 @@
 })();
 // ---------- Data Model ----------
 const LS_KEY = 'fjssp-spa';
+const AUTH_LS_KEY = 'fjssp-auth';
+const API_BASE = (window.ENV && window.ENV.API_BASE) || "https://d5dbceei9enp79259un2.z7jmlavt.apigw.yandexcloud.net";
 const project = load() || {
 units: 'minutes',
 policy: { priority_objective: 'lexicographic' }, // по умолчанию строгие приоритеты
@@ -40,6 +42,113 @@ function load(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)); }catch(e)
 
 const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
+
+function loadAuth() {
+  try { return JSON.parse(localStorage.getItem(AUTH_LS_KEY)); } catch(e) { return null; }
+}
+function saveAuth(state) {
+  if (state) localStorage.setItem(AUTH_LS_KEY, JSON.stringify(state));
+  else localStorage.removeItem(AUTH_LS_KEY);
+}
+let authState = loadAuth();
+
+function updateAuthUI(){
+  const info = $('#auth-info');
+  const btnLogin = $('#btn-login');
+  const btnLogout = $('#btn-logout');
+  const userAdminWrapper = $('#user-admin-wrapper');
+  if (!info || !btnLogin || !btnLogout) return;
+
+  if (authState && authState.access_token) {
+    const roleLabel = authState.role === 'admin' ? 'админ' : 'пользователь';
+    info.textContent = `👤 ${authState.username} (${roleLabel})`;
+    btnLogin.style.display = 'none';
+    btnLogout.style.display = 'inline-flex';
+
+    if (authState.role === 'admin') {
+      if (userAdminWrapper) {
+        userAdminWrapper.style.display = 'block';
+        renderUserAdmin();
+      }
+    } else {
+      if (userAdminWrapper) userAdminWrapper.style.display = 'none';
+    }
+  } else {
+    info.textContent = 'Не авторизован';
+    btnLogin.style.display = 'inline-flex';
+    btnLogout.style.display = 'none';
+    if (userAdminWrapper) userAdminWrapper.style.display = 'none';
+  }
+}
+
+function showLoginModal(){
+  const modal = $('#login-modal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  $('#login-error').style.display = 'none';
+  $('#login-username').focus();
+}
+function hideLoginModal(){
+  const modal = $('#login-modal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  const pass = $('#login-password');
+  if (pass) pass.value = '';
+}
+
+$('#btn-login')?.addEventListener('click', showLoginModal);
+$('#btn-login-cancel')?.addEventListener('click', hideLoginModal);
+
+async function performLogin(){
+  const uEl = $('#login-username');
+  const pEl = $('#login-password');
+  const errEl = $('#login-error');
+  if (!uEl || !pEl || !errEl) return;
+  const username = uEl.value.trim();
+  const password = pEl.value;
+  if (!username || !password) {
+    errEl.textContent = 'Укажите логин и пароль';
+    errEl.style.display = 'block';
+    return;
+  }
+  errEl.style.display = 'none';
+  try {
+    const resp = await fetch(`${API_BASE}/auth/login`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ username, password }),
+    });
+    if (!resp.ok) {
+      errEl.textContent = 'Неверный логин или пароль';
+      errEl.style.display = 'block';
+      return;
+    }
+    const data = await resp.json();
+    authState = {
+      access_token: data.access_token,
+      username: data.username,
+      role: data.role,
+      exp: data.exp,
+    };
+    saveAuth(authState);
+    hideLoginModal();
+    updateAuthUI();
+  } catch (e) {
+    errEl.textContent = 'Ошибка сети при входе';
+    errEl.style.display = 'block';
+  }
+}
+
+$('#btn-login-submit')?.addEventListener('click', performLogin);
+$('#login-password')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter') performLogin();
+});
+
+$('#btn-logout')?.addEventListener('click', () => {
+  authState = null;
+  saveAuth(null);
+  updateAuthUI();
+});
 
 // --- Network util: fetch с автоповторами для 502/503/504 + сетевых ошибок ---
 async function fetchRetry(url, opts = {}, tries = 3, backoff = 300) {
@@ -791,6 +900,177 @@ cells.forEach(([icon, label, value])=>{
 });
 }
 
+// ---------- User Management ----------
+
+async function renderUserAdmin(){
+  const container = $('#user-admin-content');
+  if (!container) return;
+  if (!authState || authState.role !== 'admin') {
+    container.innerHTML = '<div class="help">Доступно только администратору</div>';
+    return;
+  }
+  container.innerHTML = 'Загрузка списка пользователей...';
+
+  try {
+    const resp = await fetch(`${API_BASE}/users`, {
+      headers: {
+        'Authorization': `Bearer ${authState.access_token}`,
+      }
+    });
+    if (!resp.ok) {
+      container.innerHTML = '<div class="help">Ошибка загрузки списка пользователей</div>';
+      return;
+    }
+    const users = await resp.json();
+
+    const rows = users.map(u => `
+      <tr>
+        <td>${u.username}</td>
+        <td>${u.role}</td>
+        <td>${u.is_active ? '✅' : '⛔'}</td>
+        <td>
+          <button class="btn small secondary" data-act="edit-user" data-user="${u.username}">Изменить</button>
+          <button class="btn small danger" data-act="del-user" data-user="${u.username}">Удалить</button>
+        </td>
+      </tr>
+    `).join('');
+
+    container.innerHTML = `
+      <div class="help">Создавайте пользователей и задавайте роли. Минимальный функционал: логин/пароль, роль, блокировка.</div>
+      <h4>Список пользователей</h4>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px">
+        <thead>
+          <tr>
+            <th style="border:1px solid #e2e8f0;padding:4px 6px">Логин</th>
+            <th style="border:1px solid #e2e8f0;padding:4px 6px">Роль</th>
+            <th style="border:1px solid #e2e8f0;padding:4px 6px">Активен</th>
+            <th style="border:1px solid #e2e8f0;padding:4px 6px">Действия</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+
+      <h4>Создать пользователя</h4>
+      <div class="grid g3" style="margin-top:8px">
+        <div>
+          <label>Логин</label>
+          <input id="new-user-login" type="text">
+        </div>
+        <div>
+          <label>Пароль</label>
+          <input id="new-user-password" type="password">
+        </div>
+        <div>
+          <label>Роль</label>
+          <select id="new-user-role">
+            <option value="user">Пользователь</option>
+            <option value="admin">Администратор</option>
+          </select>
+        </div>
+      </div>
+      <div class="row row-end" style="margin-top:8px">
+        <button class="btn small success" id="btn-create-user">Создать</button>
+      </div>
+      <div id="user-admin-error" class="help" style="color:var(--danger);margin-top:4px;display:none;"></div>
+    `;
+
+    $('#btn-create-user')?.addEventListener('click', createUserFromForm);
+    container.addEventListener('click', handleUserAdminClicks);
+  } catch (e) {
+    container.innerHTML = '<div class="help">Ошибка сети при загрузке пользователей</div>';
+  }
+}
+
+async function createUserFromForm(){
+  const loginEl = $('#new-user-login');
+  const passEl = $('#new-user-password');
+  const roleEl = $('#new-user-role');
+  const errEl = $('#user-admin-error');
+  if (!loginEl || !passEl || !roleEl || !errEl) return;
+
+  const username = loginEl.value.trim();
+  const password = passEl.value;
+  const role = roleEl.value;
+
+  if (!username || !password) {
+    errEl.textContent = 'Укажите логин и пароль';
+    errEl.style.display = 'block';
+    return;
+  }
+  errEl.style.display = 'none';
+
+  try {
+    const resp = await fetch(`${API_BASE}/users`, {
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'Authorization': `Bearer ${authState.access_token}`,
+      },
+      body: JSON.stringify({ username, password, role }),
+    });
+    if (!resp.ok) {
+      const txt = await resp.text();
+      errEl.textContent = 'Ошибка создания пользователя: ' + txt;
+      errEl.style.display = 'block';
+      return;
+    }
+    // перерисовать список
+    await renderUserAdmin();
+  } catch (e) {
+    errEl.textContent = 'Ошибка сети при создании пользователя';
+    errEl.style.display = 'block';
+  }
+}
+
+async function handleUserAdminClicks(e){
+  const btn = e.target.closest('[data-act]');
+  if (!btn) return;
+  const username = btn.dataset.user;
+  if (!username) return;
+
+  if (btn.dataset.act === 'del-user') {
+    if (!confirm(`Удалить пользователя ${username}?`)) return;
+    try {
+      const resp = await fetch(`${API_BASE}/users/${encodeURIComponent(username)}`, {
+        method:'DELETE',
+        headers:{ 'Authorization': `Bearer ${authState.access_token}` },
+      });
+      if (!resp.ok) {
+        alert('Ошибка удаления пользователя');
+        return;
+      }
+      await renderUserAdmin();
+    } catch (e) {
+      alert('Ошибка сети при удалении пользователя');
+    }
+  }
+
+  if (btn.dataset.act === 'edit-user') {
+    const newRole = prompt('Новая роль (admin/user, пусто — не менять):', '');
+    const block = confirm('Заблокировать пользователя? ОК = да, Отмена = нет');
+    const payload = {};
+    if (newRole) payload.role = newRole;
+    payload.is_active = !block;
+    try {
+      const resp = await fetch(`${API_BASE}/users/${encodeURIComponent(username)}`, {
+        method:'PUT',
+        headers:{
+          'Content-Type':'application/json',
+          'Authorization': `Bearer ${authState.access_token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!resp.ok) {
+        alert('Ошибка обновления пользователя');
+        return;
+      }
+      await renderUserAdmin();
+    } catch (e) {
+      alert('Ошибка сети при обновлении пользователя');
+    }
+  }
+}
+
 $('#btn-export-json').addEventListener('click', ()=>{
 // Prepare arrays for export
 const orders = Object.values(project.orders).map(o=>({ order_id:o.id, priority:o.priority }));
@@ -954,11 +1234,17 @@ window.open("help.html", "_blank", "noopener");
 document.getElementById('btn-optimize').addEventListener('click', async ()=>{
   const btn = document.getElementById('btn-optimize');
   if (btn.disabled) return;
+
+  // проверка авторизации
+  if (!authState || !authState.access_token) {
+    alert('Для расчёта плана нужно войти в систему');
+    showLoginModal();
+    return;
+  }
+
   btn.disabled = true;
   btn.dataset.prev = btn.innerHTML;
   btn.innerHTML = '⏳ Идёт расчёт…';
-
-  const BASE = (window.ENV && window.ENV.API_BASE) || "https://d5dbceei9enp79259un2.z7jmlavt.apigw.yandexcloud.net";
 
   const spinnerHtml = `
     <!doctype html><meta charset="utf-8">
@@ -1018,12 +1304,19 @@ document.getElementById('btn-optimize').addEventListener('click', async ()=>{
     }));
     const exportObj = { units: project.units, policy: project.policy, orders, deliveries, stones, sawPrograms, details };
 
+    const headers = { 'Content-Type':'application/json' };
+    headers['Authorization'] = `Bearer ${authState.access_token}`;
+
     // 4) запрос на бэк
-    const resp = await fetchRetry(`${BASE}/optimize/html-file`, {
+    const resp = await fetchRetry(`${API_BASE}/optimize/html-file`, {
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers,
       body: JSON.stringify(exportObj)
     }, 3, 400);
+
+    if (resp.status === 401) {
+      throw new Error('Сессия истекла или нет доступа. Войдите заново.');
+    }
 
     const data = await resp.json();
 
@@ -1046,7 +1339,7 @@ document.getElementById('btn-optimize').addEventListener('click', async ()=>{
     }
 
   } catch (e) {
-    alert('Ошибка расчёта: ' + e.message + '\nПроверьте доступность: ' + BASE + '/ping');
+    alert('Ошибка расчёта: ' + e.message + '\nПроверьте доступность: ' + API_BASE + '/ping');
     if (preview && !preview.closed) try { preview.close(); } catch {}
   } finally {
     btn.disabled = false;
@@ -1060,6 +1353,6 @@ localStorage.removeItem(LS_KEY);
 window.location.reload();
 });
 
-function renderAll(){ renderOrders(); renderDelComposer(); renderDeliveries(); renderStones(); renderDetails(); renderExport(); }
+function renderAll(){ renderOrders(); renderDelComposer(); renderDeliveries(); renderStones(); renderDetails(); renderExport(); updateAuthUI(); }
 window.deliveryLines = [];
 renderAll();
