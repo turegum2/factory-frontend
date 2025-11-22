@@ -360,6 +360,11 @@ input[type="number"]::-webkit-outer-spin-button {
 .g3 { grid-template-columns: repeat(3, 1fr); }
 .g4 { grid-template-columns: repeat(4, 1fr); }
 
+/* Выравнивание логина и пароля по высоте в блоке "Создать пользователя" */
+#user-admin-content .grid.g2 {
+    align-items: flex-end; /* выровнять содержимое колонок по нижнему краю */
+}
+
 @media (max-width: 768px) {
     .g2, .g3, .g4 { grid-template-columns: 1fr; }
 }
