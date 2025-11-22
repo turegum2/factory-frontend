@@ -51,6 +51,12 @@ function saveAuth(state) {
   else localStorage.removeItem(AUTH_LS_KEY);
 }
 let authState = loadAuth();
+function isAuthValid() {
+  if (!authState || !authState.access_token) return false;
+  // если бэк в токен кладёт exp (unix-время в секундах) – проверяем ещё и его
+  if (authState.exp && Date.now() > authState.exp * 1000) return false;
+  return true;
+}
 
 function updateAuthUI(){
   const info = $('#auth-info');
@@ -59,7 +65,7 @@ function updateAuthUI(){
   const userAdminWrapper = $('#user-admin-wrapper');
   if (!info || !btnLogin || !btnLogout) return;
 
-  if (authState && authState.access_token) {
+  if (isAuthValid()) {
     const roleLabel = authState.role === 'admin' ? 'админ' : 'пользователь';
     info.textContent = `👤 ${authState.username} (${roleLabel})`;
     btnLogin.style.display = 'none';
@@ -74,6 +80,10 @@ function updateAuthUI(){
       if (userAdminWrapper) userAdminWrapper.style.display = 'none';
     }
   } else {
+    // если токен невалиден — выбиваем из авторизации
+    authState = null;
+    saveAuth(null);
+
     info.textContent = 'Не авторизован';
     btnLogin.style.display = 'inline-flex';
     btnLogout.style.display = 'none';
@@ -267,6 +277,7 @@ orders.forEach(o=>{
 }
 
 $('#btn-add-order').addEventListener('click', ()=>{
+if (!ensureAuth()) return;
 const id = $('#new-order-id').value.trim();
 if (!id) {
     alert('Введите номер заказа');
@@ -1071,6 +1082,15 @@ async function handleUserAdminClicks(e){
   }
 }
 
+function ensureAuth() {
+  if (!isAuthValid()) {
+    alert('Для работы с планировщиком нужно войти в систему');
+    showLoginModal();
+    return false;
+  }
+  return true;
+}
+
 $('#btn-export-json').addEventListener('click', ()=>{
 // Prepare arrays for export
 const orders = Object.values(project.orders).map(o=>({ order_id:o.id, priority:o.priority }));
@@ -1106,6 +1126,7 @@ downloadJSON('input_data.json', exportObj);
 
 // --- Import JSON ---
 $('#btn-import-json').addEventListener('click', ()=>{
+if (!ensureAuth()) return;
 $('#file-json').click();
 });
 
@@ -1353,6 +1374,20 @@ localStorage.removeItem(LS_KEY);
 window.location.reload();
 });
 
-function renderAll(){ renderOrders(); renderDelComposer(); renderDeliveries(); renderStones(); renderDetails(); renderExport(); updateAuthUI(); }
+function renderAll(){ 
+  renderOrders(); 
+  renderDelComposer(); 
+  renderDeliveries(); 
+  renderStones(); 
+  renderDetails(); 
+  renderExport(); 
+  updateAuthUI(); 
+}
+
 window.deliveryLines = [];
 renderAll();
+
+// если нет действующей авторизации — сразу показываем модальное окно логина
+if (!isAuthValid()) {
+  showLoginModal();
+}
