@@ -55,9 +55,22 @@ header {
 .header-content {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 20px;
     flex-wrap: wrap;
+}
+
+/* Кнопки в шапке */
+.header-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    flex: 1 1 auto; /* даём центру «растягиваться» */
+}
+
+/* Блок с логином/именем пользователя справа */
+.header-user {
+    margin-left: auto; /* прижать в самый правый край шапки */
 }
 
 h1 {
@@ -87,14 +100,6 @@ h1 {
     opacity: 0.8;
     margin-top: 4px;
     color: #000;
-}
-
-/* Кнопки в шапке */
-.header-actions {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    align-items: center;
 }
 
 /* Основная карточка */
