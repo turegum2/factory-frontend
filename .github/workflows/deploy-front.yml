@@ -34,4 +34,7 @@ jobs:
           aws s3 sync . s3://${{ vars.S3_BUCKET }} \
             --endpoint-url ${{ vars.S3_ENDPOINT }} \
             --delete \
-            --exclude ".git/*" --exclude ".github/*"
+            --exclude ".git/*" \
+            --exclude ".github/*" \
+            --exclude "prod/*" \
+            --exclude "users/*"
