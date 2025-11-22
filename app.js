@@ -1264,7 +1264,10 @@ async function renderUserAdmin(){
       <div id="user-admin-error" class="help" style="color:var(--danger);margin-top:4px;display:none;"></div>
     `;
 
-    $('#btn-create-user')?.addEventListener('click', createUserFromForm);
+    const btnCreateUser = $('#btn-create-user');
+    if (btnCreateUser) {
+    btnCreateUser.addEventListener('click', createUserFromForm);
+    }
     container.onclick = handleUserAdminClicks;
   } catch (e) {
     container.innerHTML = '<div class="help">Ошибка сети при загрузке пользователей</div>';
@@ -1364,161 +1367,214 @@ function ensureAuth() {
   return true;
 }
 
-$('#btn-export').addEventListener('click', ()=>{
-// Prepare arrays for export
-const orders = Object.values(project.orders).map(o=>({ order_id:o.id, priority:o.priority }));
-const deliveries = Object.values(project.deliveries).map(d=>({
-    delivery_id: d.id,
-    duration_min: d.duration,
-    lines: (d.lines||[]).map(l=>({ order_id: l.orderId, qty: l.qty })),
-    unlocks_stones: d.stoneIds.join(',')
-}));
-const stones = Object.values(project.stones).map(s=>({ stone_id:s.id, order_id:s.orderId, delivery_id:s.deliveryId }));
-const sawPrograms = Object.values(project.sawPrograms).map(sp=>({ prog_id:sp.id, stone_id:sp.stoneId, load_C_min:sp.load, process_D_min:sp.process, unload_E_min:sp.unload }));
-const details = Object.values(project.details).map(d=>({
-    detail_id:d.id,
-    order_id: (project.stones[d.stoneId] && project.stones[d.stoneId].orderId)
-            ? project.stones[d.stoneId].orderId : '',
-    stone_id:d.stoneId,
-    source_prog_id:d.sourceProgId,
-    need_edge: d.edgeNeeded? 'Y':'N',
-    edge_load_F_min: d.edgeNeeded? d.edge_load:0,
-    edge_process_G_min: d.edgeNeeded? d.edge_process:0,
-    edge_unload_H_min: d.edgeNeeded? d.edge_unload:0,
-    note: d.note||'' ,
-    millingStages: (d.millingStages||[]).map(ms=>({ id: ms.id, machine: ms.machine, mill_load_min: ms.load, mill_process_min: ms.process, mill_unload_min: ms.unload }))
-}));
+// --- Экспорт / импорт проекта (кнопки «Сохранить» / «Загрузить») ---
 
-const exportObj = {
-    units: project.units,
-    policy: project.policy,
-    orders, deliveries, stones, sawPrograms, details
-};
-downloadJSON('input_data.json', exportObj);
-});
+const btnExport = $('#btn-export');
+if (btnExport) {
+  btnExport.addEventListener('click', () => {
+    if (!ensureAuth()) return;
 
-// --- Import JSON ---
-$('#btn-import-json').addEventListener('click', ()=>{
-if (!ensureAuth()) return;
-$('#file-json').click();
-});
+    // Prepare arrays for export
+    const orders = Object.values(project.orders).map(o => ({
+      order_id: o.id,
+      priority: o.priority,
+    }));
 
-$('#file-json').addEventListener('change', async e=>{
-const file = e.target.files[0];
-if(!file) return;
-try{
-    const text = await file.text();
-    const data = JSON.parse(text);
-    
-    // Clear current project
-    project.orders = {};
-    project.deliveries = {};
-    project.stones = {};
-    project.sawPrograms = {};
-    project.details = {};
-    
-    // Import data
-    (data.orders||[]).forEach(o=>{
-    const p = Math.min(1, Number(o.priority) || 0); // 0 или 1
-    project.orders[o.order_id] = {
-        id: o.order_id,
-        priority: p,
-        deliveryIds: [],
-        stoneIds: []
-    };
-    });
-    
-    (data.stones||[]).forEach(s=>{
-    project.stones[s.stone_id] = {
-        id: s.stone_id,
-        orderId: s.order_id,
-        deliveryId: s.delivery_id || null,
-        sawPrograms: []
-    };
-    const order = project.orders[s.order_id];
-    if(order){
-        order.stoneIds = order.stoneIds || [];
-        order.stoneIds.push(s.stone_id);
-    }
-    });
-    
-    (data.sawPrograms||[]).forEach(sp=>{
-    project.sawPrograms[sp.prog_id] = {
-        id: sp.prog_id,
-        stoneId: sp.stone_id,
-        load: sp.load_C_min || 0,
-        process: sp.process_D_min || 0,
-        unload: sp.unload_E_min || 0,
-        details: []
-    };
-    const stone = project.stones[sp.stone_id];
-    if(stone){
-        stone.sawPrograms = stone.sawPrograms || [];
-        stone.sawPrograms.push(sp.prog_id);
-    }
-    });
-    
-    (data.details||[]).forEach(d=>{
-    project.details[d.detail_id] = {
-        id: d.detail_id,
-        stoneId: d.stone_id,
-        sourceProgId: d.source_prog_id,
-        note: d.note || '',
-        edgeNeeded: d.need_edge === 'Y' || d.need_edge === true,
-        edge_load: d.edge_load_F_min || 0,
-        edge_process: d.edge_process_G_min || 0,
-        edge_unload: d.edge_unload_H_min || 0,
-        millingStages: (d.millingStages||[]).map(ms=>({
+    const deliveries = Object.values(project.deliveries).map(d => ({
+      delivery_id: d.id,
+      duration_min: d.duration,
+      lines: (d.lines || []).map(l => ({ order_id: l.orderId, qty: l.qty })),
+      unlocks_stones: (d.stoneIds || []).join(','),
+    }));
+
+    const stones = Object.values(project.stones).map(s => ({
+      stone_id: s.id,
+      order_id: s.orderId,
+      delivery_id: s.deliveryId,
+    }));
+
+    const sawPrograms = Object.values(project.sawPrograms).map(sp => ({
+      prog_id: sp.id,
+      stone_id: sp.stoneId,
+      load_C_min: sp.load,
+      process_D_min: sp.process,
+      unload_E_min: sp.unload,
+    }));
+
+    const details = Object.values(project.details).map(d => ({
+      detail_id: d.id,
+      order_id: (project.stones[d.stoneId] && project.stones[d.stoneId].orderId)
+        ? project.stones[d.stoneId].orderId
+        : '',
+      stone_id: d.stoneId,
+      source_prog_id: d.sourceProgId,
+      need_edge: d.edgeNeeded ? 'Y' : 'N',
+      edge_load_F_min: d.edgeNeeded ? d.edge_load : 0,
+      edge_process_G_min: d.edgeNeeded ? d.edge_process : 0,
+      edge_unload_H_min: d.edgeNeeded ? d.edge_unload : 0,
+      note: d.note || '',
+      millingStages: (d.millingStages || []).map(ms => ({
         id: ms.id,
         machine: ms.machine,
-        load: ms.mill_load_min || 0,
-        process: ms.mill_process_min || 0,
-        unload: ms.mill_unload_min || 0
-        }))
+        mill_load_min: ms.load,
+        mill_process_min: ms.process,
+        mill_unload_min: ms.unload,
+      })),
+    }));
+
+    const exportObj = {
+      units: project.units,
+      policy: project.policy,
+      orders,
+      deliveries,
+      stones,
+      sawPrograms,
+      details,
     };
-    const prog = project.sawPrograms[d.source_prog_id];
-    if(prog){
-        prog.details = prog.details || [];
-        prog.details.push(d.detail_id);
-    }
-    });
-    
-    (data.deliveries||[]).forEach(d=>{
-    const stoneIds = d.unlocks_stones ? d.unlocks_stones.split(',').filter(x=>x) : [];
-    project.deliveries[d.delivery_id] = {
-        id: d.delivery_id,
-        duration: d.duration_min || 0,
-        lines: (d.lines||[]).map(l=>({ orderId: l.order_id, qty: l.qty || 1 })),
-        stoneIds
-    };
-    // Update stones with delivery info
-    stoneIds.forEach(sid=>{
-        if(project.stones[sid]){
-        project.stones[sid].deliveryId = d.delivery_id;
-        }
-    });
-    // Update orders with delivery info
-    (d.lines||[]).forEach(line=>{
-        const order = project.orders[line.order_id];
-        if(order){
-        order.deliveryIds = order.deliveryIds || [];
-        order.deliveryIds.push(d.delivery_id);
-        }
-    });
-    });
-    
-    // Режим всегда «lexicographic» — переписываем старые JSON
-    project.policy = { priority_objective: 'lexicographic' };
-    project.units = data.units || 'minutes';
-    
-    persist();
-    renderAll();
-    alert('Данные успешно загружены!');
-}catch(err){
-    alert('Ошибка загрузки файла: ' + err.message);
+
+    downloadJSON('input_data.json', exportObj);
+  });
 }
-e.target.value = '';
-});
+
+const btnImport = $('#btn-import');
+if (btnImport) {
+  btnImport.addEventListener('click', () => {
+    if (!ensureAuth()) return;
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json';
+
+    input.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+
+        // Очистить текущий проект
+        project.orders = {};
+        project.deliveries = {};
+        project.stones = {};
+        project.sawPrograms = {};
+        project.details = {};
+
+        // --- восстановление данных (логика как была) ---
+
+        (data.orders || []).forEach(o => {
+          const p = Math.min(1, Number(o.priority) || 0); // 0 или 1
+          project.orders[o.order_id] = {
+            id: o.order_id,
+            priority: p,
+            deliveryIds: [],
+            stoneIds: [],
+          };
+        });
+
+        (data.stones || []).forEach(s => {
+          project.stones[s.stone_id] = {
+            id: s.stone_id,
+            orderId: s.order_id,
+            deliveryId: s.delivery_id || null,
+            sawPrograms: [],
+          };
+          const order = project.orders[s.order_id];
+          if (order) {
+            order.stoneIds = order.stoneIds || [];
+            order.stoneIds.push(s.stone_id);
+          }
+        });
+
+        (data.sawPrograms || []).forEach(sp => {
+          project.sawPrograms[sp.prog_id] = {
+            id: sp.prog_id,
+            stoneId: sp.stone_id,
+            load: sp.load_C_min || 0,
+            process: sp.process_D_min || 0,
+            unload: sp.unload_E_min || 0,
+            details: [],
+          };
+          const stone = project.stones[sp.stone_id];
+          if (stone) {
+            stone.sawPrograms = stone.sawPrograms || [];
+            stone.sawPrograms.push(sp.prog_id);
+          }
+        });
+
+        (data.details || []).forEach(d => {
+          project.details[d.detail_id] = {
+            id: d.detail_id,
+            stoneId: d.stone_id,
+            sourceProgId: d.source_prog_id || null,
+            note: d.note || '',
+            edgeNeeded: d.need_edge === 'Y',
+            edge_load: d.edge_load_F_min || 0,
+            edge_process: d.edge_process_G_min || 0,
+            edge_unload: d.edge_unload_H_min || 0,
+            millingStages: (d.millingStages || []).map(ms => ({
+              id: ms.id,
+              machine: ms.machine,
+              load: ms.mill_load_min || 0,
+              process: ms.mill_process_min || 0,
+              unload: ms.mill_unload_min || 0,
+            })),
+          };
+          const stone = project.stones[d.stone_id];
+          if (stone) {
+            stone.details = stone.details || [];
+            stone.details.push(d.detail_id);
+          }
+          const prog = project.sawPrograms[d.source_prog_id];
+          if (prog) {
+            prog.details = prog.details || [];
+            prog.details.push(d.detail_id);
+          }
+        });
+
+        (data.deliveries || []).forEach(d => {
+          const stoneIds = d.unlocks_stones
+            ? d.unlocks_stones.split(',').filter(x => x)
+            : [];
+          project.deliveries[d.delivery_id] = {
+            id: d.delivery_id,
+            duration: d.duration_min || 0,
+            lines: (d.lines || []).map(l => ({
+              orderId: l.order_id,
+              qty: l.qty || 1,
+            })),
+            stoneIds,
+          };
+          // Update stones with delivery info
+          stoneIds.forEach(sid => {
+            if (project.stones[sid]) {
+              project.stones[sid].deliveryId = d.delivery_id;
+            }
+          });
+          // Update orders with delivery info
+          (d.lines || []).forEach(line => {
+            const order = project.orders[line.order_id];
+            if (order) {
+              order.deliveryIds = order.deliveryIds || [];
+              order.deliveryIds.push(d.delivery_id);
+            }
+          });
+        });
+
+        // Политика приоритета — как в новой версии
+        project.policy = { priority_objective: 'lexicographic' };
+
+        persist();
+        renderAll();
+        alert('Данные успешно загружены!');
+      } catch (err) {
+        alert('Ошибка загрузки файла: ' + err.message);
+      }
+    });
+
+    input.click();
+  });
+}
 
 document.getElementById('btn-help').addEventListener('click', ()=>{
 // Открываем синхронно — браузер не заблокирует
@@ -1637,11 +1693,14 @@ document.getElementById('btn-optimize').addEventListener('click', async ()=>{
   }
 });
 
-$('#btn-reset').addEventListener('click', ()=>{
-if(!confirm('Удалить все данные? Это действие нельзя отменить.')) return;
-localStorage.removeItem(LS_KEY);
-window.location.reload();
-});
+const btnClear = $('#btn-clear');
+if (btnClear) {
+  btnClear.addEventListener('click', () => {
+    if (!confirm('Удалить все данные? Это действие нельзя отменить.')) return;
+    localStorage.removeItem(LS_KEY);
+    window.location.reload();
+  });
+}
 
 function renderAll(){ 
   renderOrders(); 
