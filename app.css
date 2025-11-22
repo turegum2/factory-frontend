@@ -54,9 +54,16 @@ header {
 
 .header-content {
     display: flex;
+    flex-direction: column;   /* две строки: верхняя и нижняя */
+    gap: 16px;
+}
+
+/* Верхняя строка шапки: заголовок слева, логин справа */
+.header-top {
+    display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 20px;
-    flex-wrap: wrap;
 }
 
 /* Кнопки в шапке */
@@ -65,12 +72,13 @@ header {
     gap: 8px;
     flex-wrap: wrap;
     align-items: center;
-    flex: 1 1 auto; /* даём центру «растягиваться» */
 }
 
 /* Блок с логином/именем пользователя справа */
 .header-user {
-    margin-left: auto; /* прижать в самый правый край шапки */
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 h1 {
@@ -628,6 +636,10 @@ input[type="number"]::-webkit-outer-spin-button {
 
 .modal.hidden {
     display: none;
+}
+
+.hidden {
+    display: none !important;
 }
 
 .modal-backdrop {

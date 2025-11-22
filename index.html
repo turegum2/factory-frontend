@@ -18,16 +18,38 @@
   <div class="container">
     <header>
       <div class="header-content">
-        <div>
-          <h1>
-            <div class="logo">🏭</div>
-            <div>
-              <div>Планировщик производства</div>
-              <div class="subtitle">Система оптимизации производственных процессов</div>
+
+        <!-- Верхняя строка: заголовок слева, логин справа -->
+        <div class="header-top">
+          <div>
+            <h1>
+              <div class="logo">🏭</div>
+              <div>
+                <div>Планировщик производства</div>
+                <div class="subtitle">Система оптимизации производственных процессов</div>
+              </div>
+            </h1>
+          </div>
+
+          <div class="header-user">
+            <div id="user-widget" class="user-widget hidden">
+              <button id="user-menu-toggle" type="button" class="user-pill">
+                <span id="user-name"></span>
+                <span class="user-menu-arrow">▾</span>
+              </button>
+              <div id="user-menu-dropdown" class="user-menu-dropdown hidden">
+                <button id="user-change-password" type="button">Сменить пароль</button>
+                <button id="user-logout" type="button">Выйти</button>
+              </div>
             </div>
-          </h1>
+
+            <button id="btn-login" class="btn secondary">
+              🔐 Войти
+            </button>
+          </div>
         </div>
 
+        <!-- Нижняя строка: главное меню под заголовком -->
         <div class="header-actions">
           <button id="btn-help" class="btn secondary">
             💡 Справка
@@ -36,7 +58,12 @@
             ✖ Очистить
           </button>
           <button id="btn-import" class="btn secondary">
-            ⬆ Загрузить
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            Загрузить
           </button>
           <button id="btn-export" class="btn secondary">
             💾 Сохранить
@@ -46,22 +73,6 @@
           </button>
         </div>
 
-        <div class="header-user">
-          <div id="user-widget" class="user-widget hidden">
-            <button id="user-menu-toggle" type="button" class="user-pill">
-              <span id="user-name"></span>
-              <span class="user-menu-arrow">▾</span>
-            </button>
-            <div id="user-menu-dropdown" class="user-menu-dropdown hidden">
-              <button id="user-change-password" type="button">Сменить пароль</button>
-              <button id="user-logout" type="button">Выйти</button>
-            </div>
-          </div>
-
-          <button id="btn-login" class="btn secondary">
-            🔐 Войти
-          </button>
-        </div>
       </div>
     </header>
     <div class="main-card">
