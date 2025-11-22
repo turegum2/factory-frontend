@@ -1364,7 +1364,7 @@ function ensureAuth() {
   return true;
 }
 
-$('#btn-export-json').addEventListener('click', ()=>{
+$('#btn-export').addEventListener('click', ()=>{
 // Prepare arrays for export
 const orders = Object.values(project.orders).map(o=>({ order_id:o.id, priority:o.priority }));
 const deliveries = Object.values(project.deliveries).map(d=>({
