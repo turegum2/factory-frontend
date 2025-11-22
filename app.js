@@ -140,14 +140,21 @@ function updateAuthUI() {
   // заблокировать основную карточку, если не авторизован
   if (mainCard) {
     mainCard.classList.toggle('app-locked', !ok);
+    console.log('App locked state:', !ok);
+  } else {
+    console.warn('updateAuthUI: .main-card not found');
   }
 }
 
 // показать / спрятать модалку логина
 function showLoginModal() {
   const modal = $('#login-modal');
-  if (!modal) return;
+  if (!modal) {
+    console.error('showLoginModal: #login-modal element not found in DOM!');
+    return;
+  }
   modal.classList.remove('hidden');
+  console.log('Login modal shown');
 
   const err = $('#login-error');
   if (err) {
@@ -170,10 +177,14 @@ function hideLoginModal() {
 // --- Обработчики логина/логаута ---
 
 async function performLogin() {
+  console.log('performLogin called');
   const uEl  = $('#login-username');
   const pEl  = $('#login-password');
   const errEl = $('#login-error');
-  if (!uEl || !pEl || !errEl) return;
+  if (!uEl || !pEl || !errEl) {
+    console.error('performLogin: missing form elements', { uEl: !!uEl, pEl: !!pEl, errEl: !!errEl });
+    return;
+  }
 
   const username = uEl.value.trim();
   const password = pEl.value;
@@ -227,23 +238,53 @@ function logout() {
   showLoginModal();
 }
 
-// подписываем кнопки
-$('#btn-login')?.addEventListener('click', showLoginModal);
+// Функция регистрации обработчиков авторизации (вызывается после загрузки DOM)
+function initAuthEventListeners() {
+  const btnLogin = $('#btn-login');
+  const btnLoginCancel = $('#btn-login-cancel');
+  const btnLoginSubmit = $('#btn-login-submit');
+  const loginPassword = $('#login-password');
+  const btnLogout = $('#btn-logout');
 
-$('#btn-login-cancel')?.addEventListener('click', () => {
-  // отменять можно только если уже авторизован, иначе остаёмся на логине
-  if (isAuthValid()) {
-    hideLoginModal();
+  if (btnLogin) {
+    btnLogin.addEventListener('click', showLoginModal);
+  } else {
+    console.warn('initAuthEventListeners: #btn-login not found');
   }
-});
 
-$('#btn-login-submit')?.addEventListener('click', performLogin);
+  if (btnLoginCancel) {
+    btnLoginCancel.addEventListener('click', () => {
+      // отменять можно только если уже авторизован, иначе остаёмся на логине
+      if (isAuthValid()) {
+        hideLoginModal();
+      }
+    });
+  } else {
+    console.warn('initAuthEventListeners: #btn-login-cancel not found');
+  }
 
-$('#login-password')?.addEventListener('keydown', e => {
-  if (e.key === 'Enter') performLogin();
-});
+  if (btnLoginSubmit) {
+    btnLoginSubmit.addEventListener('click', performLogin);
+  } else {
+    console.error('initAuthEventListeners: #btn-login-submit not found - login will not work!');
+  }
 
-$('#btn-logout')?.addEventListener('click', logout);
+  if (loginPassword) {
+    loginPassword.addEventListener('keydown', e => {
+      if (e.key === 'Enter') performLogin();
+    });
+  } else {
+    console.warn('initAuthEventListeners: #login-password not found');
+  }
+
+  if (btnLogout) {
+    btnLogout.addEventListener('click', logout);
+  } else {
+    console.warn('initAuthEventListeners: #btn-logout not found');
+  }
+
+  console.log('Auth event listeners initialized');
+}
 
 // --- Network util: fetch с автоповторами для 502/503/504 + сетевых ошибок ---
 async function fetchRetry(url, opts = {}, tries = 3, backoff = 300) {
@@ -1478,8 +1519,14 @@ function renderAll(){
 window.deliveryLines = [];
 renderAll();
 
+// инициализация обработчиков авторизации после загрузки DOM
+initAuthEventListeners();
+
 // после отрисовки подтягиваем состояние авторизации
 updateAuthUI();
 if (!isAuthValid()) {
+  console.log('User not authenticated, showing login modal');
   showLoginModal();   // модалка логина сразу поверх, пока токена нет
+} else {
+  console.log('User authenticated:', authState.username);
 }
