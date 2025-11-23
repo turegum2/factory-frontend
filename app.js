@@ -103,6 +103,8 @@ function updateAuthUI(){
   const userWidget = $('#user-widget');
   const userNameSpan = $('#user-name');
   const userAdminWrapper = $('#user-admin-wrapper');
+  const dxfTabBtn = document.querySelector('.tab[data-tab="dxf"]');
+  const dxfSection = $('#tab-dxf');
 
   const ok = isAuthValid();
   if (!ok) {
@@ -112,18 +114,36 @@ function updateAuthUI(){
 
   if (!btnLogin || !userWidget) return;
 
+  const switchToOrders = () => {
+    const ordersTabBtn = document.querySelector('.tab[data-tab="orders"]');
+    const ordersSection = $('#tab-orders');
+    const activeSection = document.querySelector('.section.active');
+
+    if (activeSection) activeSection.classList.remove('active');
+    if (ordersSection) ordersSection.classList.add('active');
+
+    document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+    if (ordersTabBtn) ordersTabBtn.classList.add('active');
+  };
+
   if (ok && authState) {
     btnLogin.style.display = 'none';
     userWidget.classList.remove('hidden');
     if (userNameSpan) userNameSpan.textContent = authState.username;
 
+    // Админские штуки
     if (authState.role === 'admin') {
       if (userAdminWrapper) {
         userAdminWrapper.style.display = 'block';
         renderUserAdmin();
       }
-    } else if (userAdminWrapper) {
-      userAdminWrapper.style.display = 'none';
+      if (dxfTabBtn) dxfTabBtn.style.display = 'inline-flex';
+    } else {
+      if (userAdminWrapper) userAdminWrapper.style.display = 'none';
+      if (dxfTabBtn) dxfTabBtn.style.display = 'none';
+      if (dxfSection && dxfSection.classList.contains('active')) {
+        switchToOrders();
+      }
     }
   } else {
     btnLogin.style.display = 'inline-flex';
@@ -131,6 +151,10 @@ function updateAuthUI(){
     const dd = $('#user-menu-dropdown');
     if (dd) dd.classList.add('hidden');
     if (userAdminWrapper) userAdminWrapper.style.display = 'none';
+    if (dxfTabBtn) dxfTabBtn.style.display = 'none';
+    if (dxfSection && dxfSection.classList.contains('active')) {
+      switchToOrders();
+    }
   }
 }
 
@@ -1699,6 +1723,97 @@ if (btnClear) {
     if (!confirm('Удалить все данные? Это действие нельзя отменить.')) return;
     localStorage.removeItem(LS_KEY);
     window.location.reload();
+  });
+}
+
+// ---------- Работа с DXF (только для админа) ----------
+
+const dxfBtn = $('#dxf-analyze-btn');
+if (dxfBtn) {
+  dxfBtn.addEventListener('click', async () => {
+    // Требуем авторизацию + роль admin
+    if (!ensureAuth()) return;
+    if (!authState || authState.role !== 'admin') {
+      alert('Раздел работы с DXF доступен только администратору.');
+      return;
+    }
+
+    const fileInput = $('#dxf-file');
+    const statusEl = $('#dxf-status');
+    const resultBlock = $('#dxf-result');
+
+    if (!fileInput || !fileInput.files || !fileInput.files.length) {
+      alert('Выберите файл .dxf');
+      return;
+    }
+
+    const file = fileInput.files[0];
+
+    // Проверка расширения – только .dxf
+    const nameLower = file.name.toLowerCase();
+    if (!nameLower.endsWith('.dxf')) {
+      alert('Поддерживаются только файлы в формате .dxf');
+      return;
+    }
+
+    if (!statusEl || !resultBlock) return;
+
+    statusEl.textContent = 'Отправка файла...';
+    resultBlock.style.display = 'none';
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const resp = await fetch(`${API_BASE}/grafics/analyze`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authState.access_token}`,
+        },
+        body: formData,
+      });
+
+      if (!resp.ok) {
+        if (resp.status === 403) {
+          throw new Error('Недостаточно прав для работы с DXF.');
+        }
+        const text = await resp.text();
+        throw new Error(`Ошибка ${resp.status}: ${text}`);
+      }
+
+      const data = await resp.json();
+
+      const showOrNa = (v) =>
+        (v === null || v === undefined || (Array.isArray(v) && v.length === 0))
+          ? 'Не найдено'
+          : Array.isArray(v) ? v.join(', ') : v;
+
+      const kromkaEl = $('#dxf-kromka');
+      const podvEl   = $('#dxf-podvorot');
+      const tsEl     = $('#dxf-ts');
+      const csEl     = $('#dxf-cs');
+
+      if (kromkaEl) {
+        kromkaEl.textContent =
+          (data.kromka_param ? `параметр ${data.kromka_param}, длины: ` : 'длины: ')
+          + showOrNa(data.kromka_lengths);
+      }
+
+      if (podvEl) {
+        podvEl.textContent =
+          (data.podvorot_param ? `параметр ${data.podvorot_param}, длины: ` : 'длины: ')
+          + showOrNa(data.podvorot_lengths);
+      }
+
+      if (tsEl) tsEl.textContent = showOrNa(data.ts);
+      if (csEl) csEl.textContent = showOrNa(data.cs);
+
+      statusEl.textContent = 'Готово';
+      resultBlock.style.display = 'block';
+    } catch (e) {
+      console.error(e);
+      statusEl.textContent = 'Ошибка: ' + e.message;
+    }
   });
 }
 
